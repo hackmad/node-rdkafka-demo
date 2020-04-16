@@ -14,13 +14,5 @@ npm run build
 ```
 
 ```
-npm run sync-consumer
-```
-
-```
-npm run stream-consumer
-```
-
-```
-npm run back-pressured-consumer
+npm run consumer
 ```
