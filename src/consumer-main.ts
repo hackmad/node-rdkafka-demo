@@ -32,7 +32,7 @@ const topic = 'test'
 
 // Start a new back pressured consumer
 const consumer = new BackPressuredConsumer(
-  brokerList || 'localhost:29092',
+  brokerList || 'localhost:9092',
   topic,
   group,
   messageHandler,
