@@ -38,7 +38,7 @@ export class CommitManager {
 
   notifyStartProcessing = (message: Message) => {
     console.debug(
-      'notifyStartProcessing:',
+      'CommitManager.notifyStartProcessing:',
       message.key?.toString(),
       message.value.toString(),
       message.topic,
