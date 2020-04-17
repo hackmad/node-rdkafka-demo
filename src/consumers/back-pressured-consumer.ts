@@ -14,27 +14,15 @@ import { queue, AsyncQueue } from 'async'
 
 import { CommitManager, CommitNotificationHandler } from './commit-manager'
 
+import {
+  messageToString,
+  delay,
+  exponentialBackoff,
+  assignmentToArray,
+} from './utils'
+
 export type MessageHandler = (message: Message) => boolean
 export type FailureHandler = (error: any) => void
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const messageToString = (message: Message): string => {
-  const key = message.key?.toString() ?? ''
-  const value = message.value.toString()
-
-  return (
-    `${key}|${value} topic: ${message.topic}, ` +
-    `partition: ${message.partition}, offset: ${message.offset}`
-  )
-}
-
-// Flatten because of type ambiguity of Assignment which gets returned
-// as an array not single item.
-const assignmentToArray = (a: Assignment) => _.flatten([a])
-
-const exponentialBackoff = (minMs: number, maxMs: number, attemptNum: number) =>
-  Math.min(Math.pow(2, attemptNum) * minMs, maxMs)
 
 export class BackPressuredConsumer {
   consumer: KafkaConsumer
@@ -122,7 +110,7 @@ export class BackPressuredConsumer {
         'offset',
         message.offset,
       )
-      await this.stallDelay(attemptNum)
+      await this.stallDelay(message.partition, attemptNum)
     }
 
     // If message is not handled then stall with exponential backoff;
@@ -157,7 +145,7 @@ export class BackPressuredConsumer {
     }
   }
 
-  stallDelay = async (attemptNum: number) => {
+  stallDelay = async (partition: number, attemptNum: number) => {
     const ms = exponentialBackoff(
       this.minRetryDelayMs,
       this.maxRetryDelayMs,
@@ -165,10 +153,12 @@ export class BackPressuredConsumer {
     )
 
     console.debug(
-      `BackPressuredConsumer.stallDelay: attempt ${attemptNum} - ${ms} ms`,
+      `BackPressuredConsumer.stallDelay: partition ${partition}, attempt ${attemptNum} - ${ms} ms`,
     )
+
     await delay(ms)
-    console.debug('BackPressuredConsumer.stallDelay: done')
+
+    console.debug('BackPressuredConsumer.stallDelay: ${partition}, done')
   }
 
   stall = (message: Message) => {

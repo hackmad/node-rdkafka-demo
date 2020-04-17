@@ -1,26 +1,23 @@
 import { BackPressuredConsumer } from './consumers/back-pressured-consumer'
 import { Message } from 'node-rdkafka'
+import { messageToString } from './consumers/utils'
 
 // This counter is used to reset sucess/failure status of the handler
 // every few times to test how the consumer reacts stalls.
-let i = 0
+let counts = new Map<number, number>()
 const messageHandler = (message: Message) => {
-  console.info(
-    'MAIN: ',
-    message.key?.toString(),
-    message.value.toString(),
-    message.partition,
-    message.offset,
-  )
+  console.info('MAIN: ', messageToString(message))
 
-  console.debug('MAIN: i before =', i)
-  i = i + 1
-  let success = i > 5 || message.value.toString() !== 'goo'
+  let c = counts[message.partition] || 0
+  c++
+  let success = c > 5 || message.value.toString() !== 'goo'
 
   if (success) {
-    i = 0
+    c = 0
   }
-  console.debug('MAIN: i after =', i)
+  counts[message.partition] = c
+
+  console.debug(`MAIN: p = ${message.partition}, count = ${c}`)
 
   return success
 }
