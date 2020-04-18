@@ -1,5 +1,12 @@
 import yargs from 'yargs'
-import { BackPressuredConsumer } from './consumers/back-pressured-consumer'
+import {
+  NonFlowingConsumer,
+  DefaultConsumeTimeout,
+  DefaultSeekTimeoutMs,
+  DefaultMinRetryDelay,
+  DefaultMaxRetryDelay,
+} from './consumers/non-flowing-consumer'
+import { DefaultCommitInterval } from './consumers/commit-manager'
 import { Message } from 'node-rdkafka'
 import { messageToString } from './consumers/utils'
 
@@ -7,9 +14,10 @@ interface CommonArgs {
   'broker-list': string
   topic: string
   'seek-timeout': number
-  'max-queue-size': number
   'min-retry-delay': number
   'max-retry-delay': number
+  'consume-timeout': number
+  'commit-interval': number
   _: any
   $0: string
 }
@@ -55,29 +63,35 @@ const argv: CommonArgs = yargs(process.argv.slice(2))
     description: 'timeout to seek current offset on stall in milliseconds',
     alias: 'sk',
     type: 'number',
-    default: 1000,
-  })
-  .option('max-queue-size', {
-    description: 'max number of messages per partition to buffer internally',
-    alias: 'q',
-    type: 'number',
-    default: 100,
+    default: DefaultSeekTimeoutMs,
   })
   .option('min-retry-delay', {
     description:
       'min time in milliseconds to delay before retrying consumption ' +
       'when a message fails to process',
-    alias: 'mnr',
+    alias: 'minr',
     type: 'number',
-    default: 1000,
+    default: DefaultMinRetryDelay,
   })
   .option('max-retry-delay', {
     description:
       'max time in milliseconds to delay before retrying consumption ' +
       'when a message fails to process',
-    alias: 'mxr',
+    alias: 'maxr',
     type: 'number',
-    default: 16000,
+    default: DefaultMaxRetryDelay,
+  })
+  .option('consume-timeout', {
+    description: 'timeout in milliseconds for consume to wait for message',
+    alias: 'ct',
+    type: 'number',
+    default: DefaultConsumeTimeout,
+  })
+  .option('commit-interval', {
+    description: 'time in milliseconds for committing offsets',
+    alias: 'ci',
+    type: 'number',
+    default: DefaultCommitInterval,
   }).argv
 
 // This counter is used to reset sucess/failure status of the handler
@@ -100,23 +114,25 @@ const messageHandler = (message: Message) => {
   return processed
 }
 
-const failureHandler = (_err: any) => {}
+const failureHandler = (err: any) => console.error(`MAIN: error ${err}`)
 
-const commitNotificationHandler = (offsets: any) => console.info(offsets)
+const commitNotificationHandler = (offsets: any) =>
+  console.info('MAIN: committed offsets', offsets)
 
 const group = `${argv.topic}_default_consumer`
 
 // Start a new back pressured consumer
-const consumer = new BackPressuredConsumer(
+const consumer = new NonFlowingConsumer(
   argv['broker-list'],
   argv['topic'],
   group,
   messageHandler,
   failureHandler,
   commitNotificationHandler,
-  argv['max-queue-size'],
   argv['seek-timeout-ms'],
   argv['min-retry-delay'],
   argv['max-retry-delay'],
+  argv['consume-timeout'],
+  argv['commit-interval'],
 )
 consumer.start()

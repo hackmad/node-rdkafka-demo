@@ -12,7 +12,6 @@
   "author": "Ahmad Kabani",
   "license": "ISC",
   "dependencies": {
-    "async": "^3.2.0",
     "avsc": "^5.4.20",
     "axios": "^0.19.2",
     "lodash": "^4.17.15",
@@ -20,7 +19,6 @@
     "yargs": "^15.3.1"
   },
   "devDependencies": {
-    "@types/async": "^3.2.0",
     "@types/axios": "^0.14.0",
     "@types/lodash": "^4.14.149",
     "@types/node": "^13.11.1",

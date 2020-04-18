@@ -1,5 +1,3 @@
-// Based on https://medium.com/walkme-engineering/managing-consumer-commits-and-back-pressure-with-node-js-and-kafka-in-production-cfd20c8120e3
-
 import * as _ from 'lodash'
 
 import {
@@ -8,11 +6,15 @@ import {
   LibrdKafkaError,
   Message,
   CODES,
+  ConsumerTopicConfig,
+  ConsumerGlobalConfig,
 } from 'node-rdkafka'
 
-import { queue, AsyncQueue } from 'async'
-
-import { CommitManager, CommitNotificationHandler } from './commit-manager'
+import {
+  CommitManager,
+  CommitNotificationHandler,
+  DefaultCommitInterval,
+} from './commit-manager'
 
 import {
   messageToString,
@@ -24,11 +26,15 @@ import {
 export type MessageHandler = (message: Message) => boolean
 export type FailureHandler = (error: any) => void
 
-export class BackPressuredConsumer {
+export const DefaultSeekTimeoutMs = 1000
+export const DefaultMinRetryDelay = 1000
+export const DefaultMaxRetryDelay = 30000
+export const DefaultConsumeTimeout = 50
+
+export class NonFlowingConsumer {
   consumer: KafkaConsumer
   topic: string
   paused: boolean = false
-  maxQueueSize: number
   seekTimeoutMs: number
   minRetryDelayMs: number
   maxRetryDelayMs: number
@@ -37,11 +43,6 @@ export class BackPressuredConsumer {
 
   // Tracks retry attempts for stall delay logic per partition
   retryAttempts = new Map<number, number>()
-
-  // Maintain separate queues per partition. If we try to use a single queue
-  // for all partitions, the consumer will stall all partitions if messageHandler
-  // returns false.
-  queues = new Map<number, AsyncQueue<Message>>()
 
   commitManager: CommitManager
 
@@ -52,47 +53,42 @@ export class BackPressuredConsumer {
     messageHandler: MessageHandler,
     failureHandler: FailureHandler,
     commitNotificationHandler: CommitNotificationHandler,
-    maxQueueSize: number = 10,
-    seekTimeoutMs: number = 1000,
-    minRetryDelayMs: number = 1000,
-    maxRetryDelayMs: number = 30000,
+    seekTimeoutMs: number = DefaultSeekTimeoutMs,
+    minRetryDelayMs: number = DefaultMinRetryDelay,
+    maxRetryDelayMs: number = DefaultMaxRetryDelay,
+    consumeTimeoutMs: number = DefaultConsumeTimeout,
+    commitIntervalMs: number = DefaultCommitInterval,
   ) {
     // Store the config
     this.topic = topic
     this.seekTimeoutMs = seekTimeoutMs
     this.messageHandler = messageHandler
     this.failureHandler = failureHandler
-    this.maxQueueSize = maxQueueSize
     this.minRetryDelayMs = minRetryDelayMs
     this.maxRetryDelayMs = maxRetryDelayMs
 
     // Create the consumer
-    const consumerConfig = {
+    const globalConfig: ConsumerGlobalConfig = {
       'group.id': consumerGroupId,
       'metadata.broker.list': brokerList,
       'enable.auto.commit': false,
-      'auto.offset.reset': 'earliest',
       offset_commit_cb: this.onOffsetCommit,
       rebalance_cb: this.onRebalance,
     }
+    const topicConfig: ConsumerTopicConfig = {
+      'auto.offset.reset': 'earliest',
+    }
 
-    this.consumer = new KafkaConsumer(consumerConfig, {})
-    this.consumer.on('ready', this.onReady).on('data', this.onData)
+    this.consumer = new KafkaConsumer(globalConfig, topicConfig)
+    this.consumer.setDefaultConsumeTimeout(consumeTimeoutMs)
+    this.consumer.on('ready', this.onReady)
 
     this.commitManager = new CommitManager(
       this.consumer,
       commitNotificationHandler,
       failureHandler,
+      commitIntervalMs,
     )
-  }
-
-  createQueue = (messageHandler: MessageHandler): AsyncQueue<Message> => {
-    // We cannot have a parallism > 1 otherwise messages in a partition
-    // will get processed out of order. This could be made configurable
-    // for other usecases where that is not necessary.
-    const q = queue(this.handleMessage(messageHandler), 1)
-    q.drain(this.onQueueDrained)
-    return q
   }
 
   start = () => {
@@ -100,19 +96,48 @@ export class BackPressuredConsumer {
     this.consumer.connect()
   }
 
-  handleMessage = (messageHandler: MessageHandler) => async (
-    message: Message,
-    done: () => void,
-  ) => {
+  onReady = () => {
+    // Start the commit manager
+    this.commitManager.start()
+
+    // Wire up the topic and start consuming messages.
+    this.consumer.subscribe([this.topic])
+    this.consumer.consume(1, this.handleMessage)
+
+    // Non-flowing mode. We'll do one message at a time so we can control
+    // offsets that are committed.
+    console.info('NonFlowingConsumer.onReady: consumer started')
+  }
+
+  handleMessage = async (err: LibrdKafkaError, messages: Message[]) => {
+    // Handle errors
+    if (err) {
+      this.failureHandler(err)
+      setTimeout(() => this.consumer.consume(1, this.handleMessage), 100)
+      return
+    }
+
+    // No message, try again after a short delay.
+    if (messages.length === 0) {
+      setTimeout(() => this.consumer.consume(1, this.handleMessage), 100)
+      return
+    }
+
+    // There should only be 1 message.
+    const [message] = messages
+    console.debug(
+      'NonFlowingConsumer.handleMessage: ',
+      messageToString(message),
+    )
+
     // Do this here instead of when seeking back in stall().
     // Its harder to do async stuff in that code
     const attemptNum = this.retryAttempts[message.partition]
     if (attemptNum > 0) {
       console.debug(
-        'BackPressuredConsumer.handleMessage: stalling partition',
-        message.partition,
-        'offset',
-        message.offset,
+        `NonFlowingConsumer.handleMessage: ` +
+          `stalling partition ${message.partition}, ` +
+          `offset ${message.offset}`,
       )
       await this.stallDelay(message.partition, attemptNum)
     }
@@ -122,17 +147,17 @@ export class BackPressuredConsumer {
     try {
       this.commitManager.notifyStartProcessing(message)
 
-      const handled = messageHandler(message)
+      const handled = this.messageHandler(message)
 
       if (!handled) {
         console.debug(
-          'BackPressuredConsumer.handleMessage: not handled',
+          'NonFlowingConsumer.handleMessage: not handled',
           messageToString(message),
         )
         this.stall(message)
       } else {
         console.debug(
-          'BackPressuredConsumer.handleMessage: handled',
+          'NonFlowingConsumer.handleMessage: handled',
           messageToString(message),
         )
 
@@ -141,11 +166,14 @@ export class BackPressuredConsumer {
       }
     } catch (e) {
       console.error(
-        'BackPressuredConsumer.handleMessage: error handling message',
+        'NonFlowingConsumer.handleMessage: error handling message',
         e,
       )
+      this.failureHandler(e)
     } finally {
-      done()
+      // Next message
+      console.debug('NonFlowingConsumer.handleMessage: next message')
+      this.consumer.consume(1, this.handleMessage)
     }
   }
 
@@ -157,27 +185,20 @@ export class BackPressuredConsumer {
     )
 
     console.debug(
-      `BackPressuredConsumer.stallDelay: partition ${partition}, attempt ${attemptNum} - ${ms} ms`,
+      `NonFlowingConsumer.stallDelay: ` +
+        `partition ${partition}, attempt ${attemptNum} - ${ms} ms`,
     )
 
     await delay(ms)
 
-    console.debug('BackPressuredConsumer.stallDelay: ${partition}, done')
+    console.debug('NonFlowingConsumer.stallDelay: ${partition}, done')
   }
 
   stall = (message: Message) => {
     // Clear everything and seek back to failed message
-    console.debug(
-      'BackPressuredConsumer.stall: partition = ',
-      message.partition,
-    )
-    this.queues[message.partition].remove(({}) => true)
+    console.debug('NonFlowingConsumer.stall: partition = ', message.partition)
 
-    // Seeking back to an older offset will trigger onData() and librdkafka
-    // will send multiple messages to us. However, the handleMessage will
-    // delay processing using exponential backoff and if this same message
-    // is not handled again, the process will repeat. Once the message in
-    // handled, the regular in order processing of the partition will resume.
+    // Seek back to current message's offset.
     this.consumer.seek(
       {
         topic: message.topic,
@@ -190,7 +211,7 @@ export class BackPressuredConsumer {
           // This could mean a potential problem with consumer. Notify the
           // calling code.
           console.error(
-            'BackPressuredConsumer.stall: failed to seek to message',
+            'NonFlowingConsumer.stall: failed to seek to message',
             err,
           )
           this.failureHandler(err)
@@ -204,47 +225,14 @@ export class BackPressuredConsumer {
     )
   }
 
-  onQueueDrained = () => {
-    // Message queue is drained after back pressure.
-    // Resume consumption if paused.
-    if (this.paused) {
-      this.consumer.resume(assignmentToArray(this.consumer.assignments()))
-      this.paused = false
-    }
-  }
-
-  onReady = () => {
-    // Wire up the topic and start consuming messages.
-    this.consumer.subscribe([this.topic])
-    this.consumer.consume()
-
-    this.commitManager.start()
-
-    console.info('BackPressuredConsumer.onReady: consumer started')
-  }
-
-  onData = (message: Message) => {
-    console.debug('BackPressuredConsumer.onData: ', messageToString(message))
-
-    // Push message onto queue
-    this.queues[message.partition].push(message)
-
-    // Pause consumption if we hit maxQueueSize. When queue is drained
-    // consumption will resume again.
-    if (this.queues[message.partition].length() > this.maxQueueSize) {
-      this.consumer.pause(assignmentToArray(this.consumer.assignments()))
-      this.paused = true
-    }
-  }
-
   onOffsetCommit = (err: any, topicPartitions: any) => {
     if (err) {
       // Log the error and notify failure
-      console.error('BackPressuredConsumer.onOffsetCommit:', err)
+      console.error('NonFlowingConsumer.onOffsetCommit:', err)
       this.failureHandler(err)
     } else {
       // Log the committed offset
-      console.debug('BackPressuredConsumer.onOffsetCommit: ', topicPartitions)
+      console.debug('NonFlowingConsumer.onOffsetCommit: ', topicPartitions)
     }
   }
 
@@ -256,16 +244,15 @@ export class BackPressuredConsumer {
       this.revokePartitions(assignment)
       this.commitManager.rebalance()
     } else {
-      console.error('BackPressuredConsumer.onRebalance: error', err)
+      console.error('NonFlowingConsumer.onRebalance: error', err)
     }
   }
 
   assignPartitions = (assignment: Assignment) => {
-    console.debug('BackPressuredConsumer.assignPartitions: ', assignment)
+    console.debug('NonFlowingConsumer.assignPartitions: ', assignment)
 
-    // Clear out the queues and retry attempts.
+    // Clear out the retry attempts.
     _.forEach(assignmentToArray(assignment), ({ partition }) => {
-      this.queues[partition] = this.createQueue(this.messageHandler)
       this.retryAttempts[partition] = 0
     })
 
@@ -273,28 +260,18 @@ export class BackPressuredConsumer {
   }
 
   revokePartitions = (assignment: Assignment) => {
-    console.debug('BackPressuredConsumer.revokePartitions:')
+    console.debug('NonFlowingConsumer.revokePartitions:')
 
     // If consumer was paused, resume it with the new partition assignment.
     if (this.paused) {
-      console.debug(
-        'BackPressuredConsumer.revokePartitions: paused -> resuming',
-      )
+      console.debug('NonFlowingConsumer.revokePartitions: paused -> resuming')
       this.consumer.resume(assignmentToArray(assignment))
       this.paused = false
     } else {
-      console.debug(
-        'BackPressuredConsumer.revokePartitions: paused -> do nothing',
-      )
+      console.debug('NonFlowingConsumer.revokePartitions: paused -> do nothing')
     }
 
-    // No need to handle messages left in queue. Partition reassignment
-    // will redirect them.
-    console.debug('BackPressuredConsumer.revokePartitions: clearing queues')
-    this.queues.forEach((q: AsyncQueue<Message>, _partition: number) =>
-      q.remove(({}) => true),
-    )
-    this.queues.clear()
+    // Clear retry attempts
     this.retryAttempts.clear()
 
     this.consumer.unassign()
