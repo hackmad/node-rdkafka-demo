@@ -28,12 +28,12 @@ export class BackPressuredConsumer {
   consumer: KafkaConsumer
   topic: string
   paused: boolean = false
-  maxQueueSize: number = 10
-  seekTimeoutMs: number = 1000
+  maxQueueSize: number
+  seekTimeoutMs: number
+  minRetryDelayMs: number
+  maxRetryDelayMs: number
   messageHandler: MessageHandler
   failureHandler: FailureHandler
-  minRetryDelayMs: number = 1000
-  maxRetryDelayMs: number = 30000
 
   // Tracks retry attempts for stall delay logic per partition
   retryAttempts = new Map<number, number>()
@@ -54,6 +54,8 @@ export class BackPressuredConsumer {
     commitNotificationHandler: CommitNotificationHandler,
     maxQueueSize: number = 10,
     seekTimeoutMs: number = 1000,
+    minRetryDelayMs: number = 1000,
+    maxRetryDelayMs: number = 30000,
   ) {
     // Store the config
     this.topic = topic
@@ -61,6 +63,8 @@ export class BackPressuredConsumer {
     this.messageHandler = messageHandler
     this.failureHandler = failureHandler
     this.maxQueueSize = maxQueueSize
+    this.minRetryDelayMs = minRetryDelayMs
+    this.maxRetryDelayMs = maxRetryDelayMs
 
     // Create the consumer
     const consumerConfig = {
