@@ -34,9 +34,14 @@ Produce a message with key and value:
 
 ```
 kafka-console-producer --broker-list localhost:9092 --topic test --property 'parse.key=true' --property 'key.separator=|'
-3c42b2fb-722a-409f-a076-ee78038ea773|hello
-8a3be645-3479-4a71-9264-5e1fa11e1302|world
-8a3be645-3479-4a71-9264-5e1fa11e1302|now
+```
+
+Type in the key/value separated by `|`:
+
+```
+0f6b74ab-a684-486b-a027-91d5451666bb|hello
+3c42b2fb-722a-409f-a076-ee78038ea773|world
+8a3be645-3479-4a71-9264-5e1fa11e1302|hackmad
 ```
 
 To test the stall logic pass message with the value `stall`:

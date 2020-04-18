@@ -3,20 +3,20 @@ import * as _ from 'lodash'
 import { KafkaConsumer, Message } from 'node-rdkafka'
 import { messageToString } from './utils'
 
-interface PartitionEntry {
+interface Offset {
   topic: string
   offset: number
   done: boolean
 }
 
-export type CommitNotificationHandler = (offsets: PartitionEntry[]) => void
+export type CommitNotificationHandler = (offsets: Offset[]) => void
 export type FailureHandler = (error: any) => void
 
 export const DefaultCommitInterval = 5000
 
 export class CommitManager {
-  partitionData = new Map<Number, PartitionEntry[]>()
   consumer: KafkaConsumer
+  partitionOffsets = new Map<Number, Offset[]>()
   commitIntervalMs: number = DefaultCommitInterval
   commitNotificationHandler: CommitNotificationHandler
   failureHandler: FailureHandler
@@ -46,11 +46,11 @@ export class CommitManager {
 
     const p = message.partition
 
-    if (!this.partitionData.has(p)) {
-      this.partitionData.set(p, [])
+    if (!this.partitionOffsets.has(p)) {
+      this.partitionOffsets.set(p, [])
     }
 
-    const pd = this.partitionData.get(p)
+    const pd = this.partitionOffsets.get(p)
     const exists = _.filter(pd, (e) => e.offset === message.offset).length > 0
 
     if (!exists) {
@@ -70,8 +70,8 @@ export class CommitManager {
 
     const p = message.partition
 
-    if (this.partitionData.has(p)) {
-      const pd = this.partitionData.get(p)
+    if (this.partitionOffsets.has(p)) {
+      const pd = this.partitionOffsets.get(p)
 
       let messages = _.filter(pd, (e) => e.offset == message.offset)
 
@@ -90,28 +90,29 @@ export class CommitManager {
     try {
       let offsetsToCommit = []
 
-      this.partitionData.forEach((offsets, p) => {
+      this.partitionOffsets.forEach((offsets, p) => {
+        // Find first offset we can commit in partition p.
         const firstDone = offsets.findIndex((e) => e.done)
         const firstNotDone = offsets.findIndex((e) => !e.done)
 
         const lastProcessed =
           firstNotDone > 0
-            ? offsets[firstNotDone - 1]
+            ? firstNotDone - 1
             : firstDone > -1
-            ? offsets[offsets.length - 1]
-            : null
+            ? offsets.length - 1
+            : -1
 
-        if (lastProcessed) {
+        if (lastProcessed >= 0) {
           // We need to add one to the offset otherwise on rebalance or when
           // the consumer restarts, it will reprocess.
           offsetsToCommit.push({
-            topic: lastProcessed.topic,
+            topic: offsets[lastProcessed].topic,
             partition: p,
-            offset: lastProcessed.offset + 1,
+            offset: offsets[lastProcessed].offset + 1,
           })
 
-          // remove committed records
-          offsets.splice(0, offsets.indexOf(lastProcessed) + 1)
+          // Remove committed records
+          offsets.splice(0, lastProcessed + 1)
         }
       })
 
@@ -135,6 +136,6 @@ export class CommitManager {
 
   rebalance = () => {
     console.log('CommitManager.rebalance: clearing partition data')
-    this.partitionData.clear()
+    this.partitionOffsets.clear()
   }
 }
