@@ -1,4 +1,5 @@
 import { KafkaConsumer, Message } from 'node-rdkafka'
+import { messageToString } from './utils'
 
 const DefaultCommitInterval = 5000
 
@@ -39,11 +40,7 @@ export class CommitManager {
   notifyStartProcessing = (message: Message) => {
     console.debug(
       'CommitManager.notifyStartProcessing:',
-      message.key?.toString(),
-      message.value.toString(),
-      message.topic,
-      message.partition,
-      message.offset,
+      messageToString(message),
     )
 
     const p = message.partition
@@ -69,11 +66,7 @@ export class CommitManager {
   notifyFinishedProcessing = (message: Message) => {
     console.debug(
       'CommitManager.notifyFinishedProcessing:',
-      message.key?.toString(),
-      message.value.toString(),
-      message.topic,
-      message.partition,
-      message.offset,
+      messageToString(message),
     )
 
     const p = message.partition
