@@ -5,7 +5,8 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
-    "consumer": "node dist/consumer-main.js",
+    "consumer": "node dist/src/consumer-main.js",
+    "register-schemas": "node dist/src/register-schemas.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Ahmad Kabani",
@@ -13,11 +14,13 @@
   "dependencies": {
     "async": "^3.2.0",
     "avsc": "^5.4.20",
+    "axios": "^0.19.2",
     "lodash": "^4.17.15",
     "node-rdkafka": "^2.8.0"
   },
   "devDependencies": {
     "@types/async": "^3.2.0",
+    "@types/axios": "^0.14.0",
     "@types/lodash": "^4.14.149",
     "@types/node": "^13.11.1",
     "prettier-tslint": "^0.4.2"

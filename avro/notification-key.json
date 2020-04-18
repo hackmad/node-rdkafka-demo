@@ -1,0 +1,5 @@
+{
+  "namespace": "com.hackmad.node_rdkafka_demo",
+  "name": "notification_key",
+  "type": "string"
+}

@@ -1,0 +1,15 @@
+{
+  "namespace": "com.hackmad.node_rdkafka_demo",
+  "name": "notification_key",
+  "type": "record",
+  "fields": [
+    {
+      "name": "email_address",
+      "type": "string"
+    },
+    {
+      "name": "message",
+      "type": "string"
+    }
+  ]
+}
