@@ -1,11 +1,13 @@
 import yargs from 'yargs'
+
 import {
   DefaultConsumeTimeout,
   DefaultSeekTimeoutMs,
   DefaultMinRetryDelay,
   DefaultMaxRetryDelay,
-} from './consumers/non-flowing-consumer'
-import { DefaultCommitInterval } from './consumers/commit-manager'
+  DefaultCommitInterval,
+} from './consumers/types'
+
 import { CommonArgs } from './commands/types'
 
 <CommonArgs>yargs(process.argv.slice(2))

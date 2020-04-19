@@ -1,6 +1,11 @@
 import { Producer } from 'node-rdkafka'
 
-export type ProducerReadyHandler = () => void
+import {
+  FailureHandler,
+  DeliveryReportHandler,
+  ProducerReadyHandler,
+  DefaultPollIntervalMs,
+} from './types'
 
 export class StandardProducer {
   producer: Producer
@@ -10,6 +15,9 @@ export class StandardProducer {
     brokerList: string,
     topic: string,
     readyHandler: ProducerReadyHandler,
+    failureHandler: FailureHandler,
+    deliveryReportHandler: DeliveryReportHandler,
+    pollInterval: number = DefaultPollIntervalMs,
   ) {
     this.topic = topic
 
@@ -18,7 +26,12 @@ export class StandardProducer {
       dr_cb: true,
     })
 
-    this.producer.on('ready', readyHandler)
+    this.producer
+      .on('ready', readyHandler)
+      .on('event.error', failureHandler)
+      .on('delivery-report', deliveryReportHandler)
+
+    this.producer.setPollInterval(pollInterval)
   }
 
   start = () => this.producer.connect()

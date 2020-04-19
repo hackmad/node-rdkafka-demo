@@ -10,11 +10,7 @@ import {
   ConsumerGlobalConfig,
 } from 'node-rdkafka'
 
-import {
-  CommitManager,
-  CommitNotificationHandler,
-  DefaultCommitInterval,
-} from './commit-manager'
+import { CommitManager } from './commit-manager'
 
 import {
   messageToString,
@@ -23,13 +19,16 @@ import {
   assignmentToArray,
 } from './utils'
 
-export type MessageHandler = (message: Message) => boolean
-export type FailureHandler = (error: any) => void
-
-export const DefaultSeekTimeoutMs = 1000
-export const DefaultMinRetryDelay = 1000
-export const DefaultMaxRetryDelay = 30000
-export const DefaultConsumeTimeout = 50
+import {
+  MessageHandler,
+  FailureHandler,
+  CommitNotificationHandler,
+  DefaultSeekTimeoutMs,
+  DefaultMinRetryDelay,
+  DefaultMaxRetryDelay,
+  DefaultConsumeTimeout,
+  DefaultCommitInterval,
+} from './types'
 
 export class NonFlowingConsumer {
   consumer: KafkaConsumer

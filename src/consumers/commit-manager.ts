@@ -1,18 +1,15 @@
 // Based on https://medium.com/walkme-engineering/managing-consumer-commits-and-back-pressure-with-node-js-and-kafka-in-production-cfd20c8120e3
 import * as _ from 'lodash'
+
 import { KafkaConsumer, Message } from 'node-rdkafka'
 import { messageToString } from './utils'
 
-interface Offset {
-  topic: string
-  offset: number
-  done: boolean
-}
-
-export type CommitNotificationHandler = (offsets: Offset[]) => void
-export type FailureHandler = (error: any) => void
-
-export const DefaultCommitInterval = 5000
+import {
+  Offset,
+  FailureHandler,
+  CommitNotificationHandler,
+  DefaultCommitInterval,
+} from './types'
 
 export class CommitManager {
   consumer: KafkaConsumer

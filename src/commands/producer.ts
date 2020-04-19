@@ -1,6 +1,7 @@
 import yargs from 'yargs'
 import { CommonArgs } from './types'
 import { StandardProducer } from '../producers/standard-producer'
+import { LibrdKafkaError, DeliveryReport } from 'node-rdkafka'
 import { v4 as uuidv4 } from 'uuid'
 import fs from 'fs'
 
@@ -33,12 +34,26 @@ class ProducerCommand {
       argv['broker-list'],
       argv['topic'],
       this.onReady,
+      this.onFailure,
+      this.onDeliveryReport,
     )
   }
 
   execute = () => this.producer.start()
 
   onReady = () => setInterval(this.produceMessage, this.intervalMs)
+
+  onFailure = (err: LibrdKafkaError) => {
+    console.error('MAIN: producer error', err)
+  }
+
+  onDeliveryReport = (err: LibrdKafkaError, report: DeliveryReport) => {
+    if (err) {
+      console.error('MAIN: delivery report error', err)
+    } else {
+      console.info('MAIN: delivery report', report)
+    }
+  }
 
   produceMessage = async () => {
     try {

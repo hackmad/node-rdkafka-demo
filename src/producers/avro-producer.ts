@@ -1,6 +1,13 @@
 import { Producer, MessageKey, MessageValue } from 'node-rdkafka'
 import { CachedSchemaRegistry } from '../schema-registry'
 
+import {
+  FailureHandler,
+  DeliveryReportHandler,
+  ProducerReadyHandler,
+  DefaultPollIntervalMs,
+} from './types'
+
 export class AvroProducer {
   producer: Producer
   topic: string
@@ -12,6 +19,10 @@ export class AvroProducer {
     brokerList: string,
     schemaRegistryUrl: string,
     topic: string,
+    readyHandler: ProducerReadyHandler,
+    failureHandler: FailureHandler,
+    deliveryReportHandler: DeliveryReportHandler,
+    pollInterval: number = DefaultPollIntervalMs,
     valueSchemaSubject: string,
     keySchemaSubject?: string,
   ) {
@@ -26,7 +37,16 @@ export class AvroProducer {
       'metadata.broker.list': brokerList,
       dr_cb: true,
     })
+
+    this.producer
+      .on('ready', readyHandler)
+      .on('event.error', failureHandler)
+      .on('delivery-report', deliveryReportHandler)
+
+    this.producer.setPollInterval(pollInterval)
   }
+
+  start = () => this.producer.connect()
 
   produce = async (value: MessageValue, key?: MessageKey) => {
     const valueSchema = await this.registry.getLatestBySubject(
