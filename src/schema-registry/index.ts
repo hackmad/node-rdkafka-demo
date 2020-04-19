@@ -1,14 +1,38 @@
 import axios from 'axios'
+import avsc from 'avsc'
 
-export class SchemaRegistry {
+interface Schema {
+  type: avsc.Type
+  timestamp: Date
+}
+
+export const DefaultRefetchThresholdMs = 1 * 60 * 60 * 1000 // 1 hour
+
+export class CachedSchemaRegistry {
   url: string
+  refetchThresholdMs: number
 
-  constructor(url: string) {
+  schemasBySubject = new Map<string, Schema>()
+  schemasById = new Map<number, Schema>()
+
+  constructor(
+    url: string,
+    refetchThresholdMs: number = DefaultRefetchThresholdMs,
+  ) {
     this.url = url
+    this.refetchThresholdMs = refetchThresholdMs
   }
 
-  getLatestBySchemaId = async (schemaId: number) => {
+  isSchemaOld = (s: Schema): boolean =>
+    new Date().getTime() - s.timestamp.getTime() > this.refetchThresholdMs
+
+  getLatestBySchemaId = async (schemaId: number): Promise<avsc.Type> => {
     const url = `${this.url}/schemas/ids/${schemaId}`
+
+    const s = this.schemasById.get(schemaId)
+    if (s && !this.isSchemaOld(s)) {
+      return s.type
+    }
 
     try {
       const response = await axios.get(url)
@@ -18,14 +42,27 @@ export class SchemaRegistry {
         throw Error('SchemaRegistry.getBySchemaId: no schema returned')
       }
 
-      return JSON.parse(schema)
+      const jsonSchema = JSON.parse(schema)
+      const avroType = avsc.Type.forSchema(jsonSchema)
+
+      this.schemasById.set(schemaId, {
+        type: avroType,
+        timestamp: new Date(),
+      })
+
+      return avroType
     } catch (e) {
       console.error('SchemaRegistry.getLatestBySchemaId: error', e)
       throw e
     }
   }
 
-  getLatestBySubject = async (subject: string) => {
+  getLatestBySubject = async (subject: string): Promise<avsc.Type> => {
+    const s = this.schemasBySubject.get(subject)
+    if (s && !this.isSchemaOld(s)) {
+      return s.type
+    }
+
     try {
       const versions = await this.getVersionsBySubject(subject)
       const latest = versions.slice(-1)[0]
@@ -38,14 +75,22 @@ export class SchemaRegistry {
         throw Error('SchemaRegistry.getBySchemaId: no schema returned')
       }
 
-      return JSON.parse(schema)
+      const jsonSchema = JSON.parse(schema)
+      const avroType = avsc.Type.forSchema(jsonSchema)
+
+      this.schemasBySubject.set(subject, {
+        type: avroType,
+        timestamp: new Date(),
+      })
+
+      return avroType
     } catch (e) {
       console.error('SchemaRegistry.getLatestBySubject: error', e)
       throw e
     }
   }
 
-  getVersionsBySubject = async (subject: string) => {
+  getVersionsBySubject = async (subject: string): Promise<Number[]> => {
     const url = `${this.url}/schemas/subjects/${subject}/versions`
 
     try {
@@ -59,14 +104,18 @@ export class SchemaRegistry {
         )
       }
 
-      return JSON.parse(versions)
+      return <Number[]>JSON.parse(versions)
     } catch (e) {
       console.error('SchemaRegistry.getVersionsBySubject: error', e)
       throw e
     }
   }
 
-  register = async (subject: string, schema: object, isKeySchema: boolean) => {
+  register = async (
+    subject: string,
+    schema: object,
+    isKeySchema: boolean,
+  ): Promise<void> => {
     const suffix = isKeySchema ? 'key' : 'value'
     const url = `${this.url}/subjects/${subject}-${suffix}/versions`
 
