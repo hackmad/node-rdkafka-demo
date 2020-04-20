@@ -78,7 +78,7 @@ export class CommitManager {
     } else {
       console.error(
         'CommitManager.notifyFinishedProcessing: error ' +
-          'called with notifyStartProcessing().',
+          'called without notifyStartProcessing().',
       )
     }
   }
