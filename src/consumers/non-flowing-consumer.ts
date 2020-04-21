@@ -146,7 +146,7 @@ export class NonFlowingConsumer {
     try {
       this.commitManager.notifyStartProcessing(message)
 
-      const handled = this.messageHandler(message)
+      const handled = await this.messageHandler(message)
 
       if (!handled) {
         console.debug(

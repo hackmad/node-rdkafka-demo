@@ -77,3 +77,15 @@ Or pass in the broker list.
 npm run avro-producer -- -b "broker1:9092,broker2:9092,broker3:9092"
 ```
 
+### Run the avro consumer
+
+```
+npm run avro-consumer
+```
+
+Or pass in the broker list.
+
+```
+npm run avro-consumer -- -b "broker1:9092,broker2:9092,broker3:9092"
+```
+

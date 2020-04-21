@@ -43,7 +43,7 @@ export class CachedSchemaRegistry {
         throw Error('SchemaRegistry.getBySchemaId: no schema returned')
       }
 
-      const avroType = avsc.Type.forSchema(schema)
+      const avroType = avsc.Type.forSchema(JSON.parse(schema))
 
       this.schemasById.set(schemaId, {
         schemaId: schemaId,
@@ -74,7 +74,6 @@ export class CachedSchemaRegistry {
       const response = await axios.get(url)
 
       const data = response.data
-      console.debug('********', subject, data)
       if (!data) {
         throw Error('SchemaRegistry.getLatestBySubject: no schema returned')
       }

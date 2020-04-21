@@ -1,6 +1,6 @@
 import { Message } from 'node-rdkafka'
 
-export type MessageHandler = (message: Message) => boolean
+export type MessageHandler = (message: Message) => Promise<boolean>
 export type FailureHandler = (error: any) => void
 
 export interface Offset {

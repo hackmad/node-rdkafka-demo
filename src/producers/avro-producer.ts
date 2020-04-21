@@ -1,6 +1,6 @@
 import { Producer } from 'node-rdkafka'
 import { CachedSchemaRegistry } from '../schema-registry'
-
+import { encode } from '../avro'
 import {
   FailureHandler,
   DeliveryReportHandler,
@@ -63,16 +63,7 @@ export class AvroProducer {
     }
 
     const [schemaId, schema] = await this.registry.getLatestBySubject(subject)
-    const magic = Buffer.from([0])
-    const payload = schema.toBuffer(data)
-    return Buffer.concat([magic, this.toBytesInt32(schemaId), payload])
-  }
-
-  toBytesInt32 = (n: number) => {
-    const arr = new ArrayBuffer(4) // an Int32 takes 4 bytes
-    const view = new DataView(arr)
-    view.setUint32(0, n, false) // byteOffset = 0; litteEndian = false
-    return new Buffer(arr)
+    return encode(schemaId, schema, data)
   }
 
   produce = async (value: object | string, key?: object | string) => {

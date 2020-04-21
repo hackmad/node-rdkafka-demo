@@ -7,6 +7,7 @@
     "build": "tsc",
     "consumer": "node dist/src/app.js consumer",
     "producer": "node dist/src/app.js producer",
+    "avro-consumer": "node dist/src/app.js avro-consumer",
     "avro-producer": "node dist/src/app.js avro-producer",
     "register-schemas": "node dist/src/register-schemas.js",
     "test": "echo \"Error: no test specified\" && exit 1"

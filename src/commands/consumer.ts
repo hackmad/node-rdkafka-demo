@@ -40,7 +40,7 @@ class ConsumerCommand {
 
   execute = () => this.consumer.start()
 
-  messageHandler = (message: Message) => {
+  messageHandler = async (message: Message) => {
     console.info('MAIN: ', messageToString(message))
     const value = message.value.toString()
     const partition = message.partition
@@ -56,7 +56,7 @@ class ConsumerCommand {
         `processed = ${processed}`,
     )
 
-    return processed
+    return Promise.resolve(processed)
   }
 
   failureHandler = (err: any) => console.error(`MAIN: error ${err}`)
