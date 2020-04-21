@@ -12,7 +12,7 @@ export interface Offset {
 export type CommitNotificationHandler = (offsets: Offset[]) => void
 
 export const DefaultSeekTimeoutMs = 1000
-export const DefaultMinRetryDelay = 1000
-export const DefaultMaxRetryDelay = 30000
-export const DefaultConsumeTimeout = 50
-export const DefaultCommitInterval = 5000
+export const DefaultMinRetryDelayMs = 1000
+export const DefaultMaxRetryDelayMs = 30000
+export const DefaultConsumeTimeoutMs = 50
+export const DefaultCommitIntervalMs = 5000

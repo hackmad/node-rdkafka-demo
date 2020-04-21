@@ -1,11 +1,11 @@
 import yargs from 'yargs'
 
 import {
-  DefaultConsumeTimeout,
+  DefaultConsumeTimeoutMs,
   DefaultSeekTimeoutMs,
-  DefaultMinRetryDelay,
-  DefaultMaxRetryDelay,
-  DefaultCommitInterval,
+  DefaultMinRetryDelayMs,
+  DefaultMaxRetryDelayMs,
+  DefaultCommitIntervalMs,
 } from './consumers/types'
 
 import { CommonArgs } from './commands/types'
@@ -36,7 +36,7 @@ import { CommonArgs } from './commands/types'
       'when a message fails to process',
     alias: 'minr',
     type: 'number',
-    default: DefaultMinRetryDelay,
+    default: DefaultMinRetryDelayMs,
   })
   .option('max-retry-delay', {
     description:
@@ -44,19 +44,19 @@ import { CommonArgs } from './commands/types'
       'when a message fails to process',
     alias: 'maxr',
     type: 'number',
-    default: DefaultMaxRetryDelay,
+    default: DefaultMaxRetryDelayMs,
   })
   .option('consume-timeout', {
     description: 'timeout in milliseconds for consume to wait for message',
     alias: 'ct',
     type: 'number',
-    default: DefaultConsumeTimeout,
+    default: DefaultConsumeTimeoutMs,
   })
   .option('commit-interval', {
     description: 'time in milliseconds for committing offsets',
     alias: 'ci',
     type: 'number',
-    default: DefaultCommitInterval,
+    default: DefaultCommitIntervalMs,
   })
   .demandCommand()
   .help()

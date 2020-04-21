@@ -24,10 +24,10 @@ import {
   FailureHandler,
   CommitNotificationHandler,
   DefaultSeekTimeoutMs,
-  DefaultMinRetryDelay,
-  DefaultMaxRetryDelay,
-  DefaultConsumeTimeout,
-  DefaultCommitInterval,
+  DefaultMinRetryDelayMs,
+  DefaultMaxRetryDelayMs,
+  DefaultConsumeTimeoutMs,
+  DefaultCommitIntervalMs,
 } from './types'
 
 export class NonFlowingConsumer {
@@ -53,10 +53,10 @@ export class NonFlowingConsumer {
     failureHandler: FailureHandler,
     commitNotificationHandler: CommitNotificationHandler,
     seekTimeoutMs: number = DefaultSeekTimeoutMs,
-    minRetryDelayMs: number = DefaultMinRetryDelay,
-    maxRetryDelayMs: number = DefaultMaxRetryDelay,
-    consumeTimeoutMs: number = DefaultConsumeTimeout,
-    commitIntervalMs: number = DefaultCommitInterval,
+    minRetryDelayMs: number = DefaultMinRetryDelayMs,
+    maxRetryDelayMs: number = DefaultMaxRetryDelayMs,
+    consumeTimeoutMs: number = DefaultConsumeTimeoutMs,
+    commitIntervalMs: number = DefaultCommitIntervalMs,
   ) {
     // Store the config
     this.topic = topic

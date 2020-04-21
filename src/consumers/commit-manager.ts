@@ -8,13 +8,13 @@ import {
   Offset,
   FailureHandler,
   CommitNotificationHandler,
-  DefaultCommitInterval,
+  DefaultCommitIntervalMs,
 } from './types'
 
 export class CommitManager {
   consumer: KafkaConsumer
   partitionOffsets = new Map<Number, Offset[]>()
-  commitIntervalMs: number = DefaultCommitInterval
+  commitIntervalMs: number = DefaultCommitIntervalMs
   commitNotificationHandler: CommitNotificationHandler
   failureHandler: FailureHandler
 
@@ -22,7 +22,7 @@ export class CommitManager {
     consumer: KafkaConsumer,
     commitNotificationHandler: CommitNotificationHandler,
     failureHandler: FailureHandler,
-    commitIntervalMs: number = DefaultCommitInterval,
+    commitIntervalMs: number = DefaultCommitIntervalMs,
   ) {
     this.consumer = consumer
     this.commitIntervalMs = commitIntervalMs
