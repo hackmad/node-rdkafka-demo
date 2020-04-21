@@ -18,12 +18,6 @@ import { CommonArgs } from './commands/types'
     type: 'string',
     default: 'localhost:9092',
   })
-  .option('topic', {
-    description: 'topic',
-    alias: 't',
-    type: 'string',
-    default: 'test',
-  })
   .option('seek-timeout', {
     description: 'timeout to seek current offset on stall in milliseconds',
     alias: 'sk',

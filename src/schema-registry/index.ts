@@ -2,6 +2,7 @@ import axios from 'axios'
 import avsc from 'avsc'
 
 interface Schema {
+  schemaId: number
   type: avsc.Type
   timestamp: Date
 }
@@ -42,10 +43,10 @@ export class CachedSchemaRegistry {
         throw Error('SchemaRegistry.getBySchemaId: no schema returned')
       }
 
-      const jsonSchema = JSON.parse(schema)
-      const avroType = avsc.Type.forSchema(jsonSchema)
+      const avroType = avsc.Type.forSchema(schema)
 
       this.schemasById.set(schemaId, {
+        schemaId: schemaId,
         type: avroType,
         timestamp: new Date(),
       })
@@ -57,33 +58,35 @@ export class CachedSchemaRegistry {
     }
   }
 
-  getLatestBySubject = async (subject: string): Promise<avsc.Type> => {
+  getLatestBySubject = async (
+    subject: string,
+  ): Promise<[number, avsc.Type]> => {
     const s = this.schemasBySubject.get(subject)
     if (s && !this.isSchemaOld(s)) {
-      return s.type
+      return [s.schemaId, s.type]
     }
 
     try {
       const versions = await this.getVersionsBySubject(subject)
-      const latest = versions.slice(-1)[0]
-      const url = `${this.url}/schemas/subjects/${subject}/versions/${latest}/schema`
+      const latest = versions[versions.length - 1]
+      const url = `${this.url}/subjects/${subject}/versions/${latest}`
 
       const response = await axios.get(url)
 
-      const schema = response.data
-      if (!schema) {
-        throw Error('SchemaRegistry.getBySchemaId: no schema returned')
+      const data = response.data
+      console.debug('********', subject, data)
+      if (!data) {
+        throw Error('SchemaRegistry.getLatestBySubject: no schema returned')
       }
 
-      const jsonSchema = JSON.parse(schema)
-      const avroType = avsc.Type.forSchema(jsonSchema)
+      const schemaId = data.id
+      const avroType = avsc.Type.forSchema(JSON.parse(data.schema))
 
-      this.schemasBySubject.set(subject, {
-        type: avroType,
-        timestamp: new Date(),
-      })
+      const s = { schemaId: schemaId, type: avroType, timestamp: new Date() }
+      this.schemasBySubject.set(subject, s)
+      this.schemasById.set(schemaId, s)
 
-      return avroType
+      return [schemaId, avroType]
     } catch (e) {
       console.error('SchemaRegistry.getLatestBySubject: error', e)
       throw e
@@ -91,20 +94,11 @@ export class CachedSchemaRegistry {
   }
 
   getVersionsBySubject = async (subject: string): Promise<Number[]> => {
-    const url = `${this.url}/schemas/subjects/${subject}/versions`
+    const url = `${this.url}/subjects/${subject}/versions`
 
     try {
       const response = await axios.get(url)
-
-      const versions = response.data
-      if (!versions) {
-        throw Error(
-          'SchemaRegistry.getVersionsBySubject: ' +
-            'no schema versions returned',
-        )
-      }
-
-      return <Number[]>JSON.parse(versions)
+      return response.data
     } catch (e) {
       console.error('SchemaRegistry.getVersionsBySubject: error', e)
       throw e

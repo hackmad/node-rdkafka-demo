@@ -8,6 +8,7 @@ import { messageToString } from '../consumers/utils'
 interface ConsumerCommandArgs extends CommonArgs {
   'stall-value': string
   'stall-count': number
+  topic: string
 }
 
 class ConsumerCommand {
@@ -70,6 +71,12 @@ exports.describe = 'run non-avro consumer'
 
 exports.builder = (yargs: yargs.Argv) =>
   yargs
+    .option('topic', {
+      description: 'topic',
+      alias: 't',
+      type: 'string',
+      default: 'test',
+    })
     .option('stall-value', {
       description: 'message value that will generate errors',
       alias: 'sv',
