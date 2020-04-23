@@ -3,15 +3,22 @@ import { CachedSchemaRegistry } from './schema-registry'
 import * as notificationKeySchema from '../avro/notification-key.json'
 import * as notificationValueSchema from '../avro/notification-value.json'
 
+import { Logger } from './logger'
+
+const logger = new Logger()
+
 const topic = 'notifications'
 const [url] = process.argv.slice(2)
-const registry = new CachedSchemaRegistry(url || 'http://localhost:8081')
+const registry = new CachedSchemaRegistry(
+  logger,
+  url || 'http://localhost:8081',
+)
 
 const main = async () => {
-  console.info('Registering notifications-key schema')
+  logger.info('Registering notifications-key schema')
   await registry.register(topic, notificationKeySchema, true)
 
-  console.info('Registering notifications-value schema')
+  logger.info('Registering notifications-value schema')
   await registry.register(topic, notificationValueSchema, false)
 }
 main()

@@ -3,6 +3,7 @@ import { CommonArgs } from './types'
 import { Message } from 'node-rdkafka'
 
 import { NonFlowingConsumer } from '../consumers/non-flowing-consumer'
+import { Logger } from '../logger'
 import { messageToString } from '../consumers/utils'
 
 interface ConsumerCommandArgs extends CommonArgs {
@@ -19,11 +20,14 @@ class ConsumerCommand {
   stallValue: string
   consumer: NonFlowingConsumer
 
+  logger = new Logger()
+
   constructor(argv: ConsumerCommandArgs) {
     this.stallCount = argv['stall-count']
     this.stallValue = argv['stall-value']
 
     this.consumer = new NonFlowingConsumer(
+      this.logger,
       argv['broker-list'],
       argv['topic'],
       `${argv.topic}_default_consumer`,
@@ -41,7 +45,8 @@ class ConsumerCommand {
   execute = () => this.consumer.start()
 
   messageHandler = async (message: Message) => {
-    console.info('MAIN: ', messageToString(message))
+    this.logger.info('MAIN', { kafka_message: messageToString(message) })
+
     const value = message.value.toString()
     const partition = message.partition
 
@@ -50,19 +55,19 @@ class ConsumerCommand {
 
     this.counts[partition] = processed ? 0 : count
 
-    console.debug(
-      `MAIN: partition = ${partition}, ` +
-        `stall count = ${this.counts[partition]}, ` +
-        `processed = ${processed}`,
-    )
+    this.logger.debug('MAIN: messageHandler', {
+      partition: partition,
+      stall_count: this.counts[partition],
+      processed: processed,
+    })
 
     return Promise.resolve(processed)
   }
 
-  failureHandler = (err: any) => console.error(`MAIN: error ${err}`)
+  failureHandler = (err: any) => this.logger.error('MAIN: error', err)
 
   commitNotificationHandler = (offsets: any) =>
-    console.info('MAIN: committed offsets', offsets)
+    this.logger.info('MAIN: committed offsets', { offsets })
 }
 
 exports.command = 'consumer'

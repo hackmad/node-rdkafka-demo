@@ -3,6 +3,9 @@ import { CommonArgs } from './types'
 import { Message } from 'node-rdkafka'
 
 import { NonFlowingAvroConsumer } from '../consumers/non-flowing-avro-consumer'
+
+import { Logger } from '../logger'
+
 import { messageToString } from '../consumers/utils'
 
 interface AvroConsumerCommandArgs extends CommonArgs {
@@ -13,8 +16,11 @@ interface AvroConsumerCommandArgs extends CommonArgs {
 class AvroConsumerCommand {
   consumer: NonFlowingAvroConsumer
 
+  logger = new Logger()
+
   constructor(argv: AvroConsumerCommandArgs) {
     this.consumer = new NonFlowingAvroConsumer(
+      this.logger,
       argv['broker-list'],
       argv['schema-registry-url'],
       argv['topic'],
@@ -33,14 +39,14 @@ class AvroConsumerCommand {
   execute = () => this.consumer.start()
 
   messageHandler = async (message: Message) => {
-    console.info('MAIN: ', messageToString(message))
+    this.logger.info('MAIN: ', { kafka_message: messageToString(message) })
     return Promise.resolve(true)
   }
 
-  failureHandler = (err: any) => console.error(`MAIN: error ${err}`)
+  failureHandler = (err: any) => this.logger.error('MAIN: error', err)
 
   commitNotificationHandler = (offsets: any) =>
-    console.info('MAIN: committed offsets', offsets)
+    this.logger.info('MAIN: committed offsets', { offsets })
 }
 
 exports.command = 'avro-consumer'

@@ -7,11 +7,15 @@ import {
   DefaultPollIntervalMs,
 } from './types'
 
+import { Logger } from '../logger'
+
 export class StandardProducer {
   producer: Producer
   topic: string
+  logger: Logger
 
   constructor(
+    logger: Logger,
     brokerList: string,
     topic: string,
     readyHandler: ProducerReadyHandler,
@@ -20,6 +24,8 @@ export class StandardProducer {
     pollInterval: number = DefaultPollIntervalMs,
   ) {
     this.topic = topic
+
+    this.logger = logger
 
     this.producer = new Producer({
       'metadata.broker.list': brokerList,

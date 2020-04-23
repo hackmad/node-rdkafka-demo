@@ -2,7 +2,6 @@
 import * as _ from 'lodash'
 
 import { KafkaConsumer, Message } from 'node-rdkafka'
-import { messageToString } from './utils'
 
 import {
   Offset,
@@ -11,19 +10,24 @@ import {
   DefaultCommitIntervalMs,
 } from './types'
 
+import { Logger } from '../logger'
+
 export class CommitManager {
   consumer: KafkaConsumer
   partitionOffsets = new Map<Number, Offset[]>()
   commitIntervalMs: number = DefaultCommitIntervalMs
   commitNotificationHandler: CommitNotificationHandler
   failureHandler: FailureHandler
+  logger: Logger
 
   constructor(
+    logger: Logger,
     consumer: KafkaConsumer,
     commitNotificationHandler: CommitNotificationHandler,
     failureHandler: FailureHandler,
     commitIntervalMs: number = DefaultCommitIntervalMs,
   ) {
+    this.logger = logger
     this.consumer = consumer
     this.commitIntervalMs = commitIntervalMs
     this.commitNotificationHandler = commitNotificationHandler
@@ -32,14 +36,11 @@ export class CommitManager {
 
   start = () => {
     setInterval(this.commitProcessedOffsets, this.commitIntervalMs)
-    console.debug('CommitManager.start: started')
+    this.logger.debug('CommitManager.start: started')
   }
 
   notifyStartProcessing = (message: Message) => {
-    console.debug(
-      'CommitManager.notifyStartProcessing:',
-      messageToString(message),
-    )
+    this.logger.debug('CommitManager.notifyStartProcessing:', { message })
 
     const p = message.partition
 
@@ -60,10 +61,7 @@ export class CommitManager {
   }
 
   notifyFinishedProcessing = (message: Message) => {
-    console.debug(
-      'CommitManager.notifyFinishedProcessing:',
-      messageToString(message),
-    )
+    this.logger.debug('CommitManager.notifyFinishedProcessing:', message)
 
     const p = message.partition
 
@@ -76,7 +74,7 @@ export class CommitManager {
         messages[0].done = true
       }
     } else {
-      console.error(
+      this.logger.error(
         'CommitManager.notifyFinishedProcessing: error ' +
           'called without notifyStartProcessing().',
       )
@@ -114,16 +112,16 @@ export class CommitManager {
       })
 
       if (offsetsToCommit.length > 0) {
-        console.debug(
+        this.logger.debug(
           'CommitManager.commitProcessedOffsets: committing offsets',
-          offsetsToCommit,
+          { offets: offsetsToCommit },
         )
 
         this.consumer.commit(offsetsToCommit)
         this.commitNotificationHandler(offsetsToCommit)
       }
     } catch (e) {
-      console.error(
+      this.logger.error(
         'CommitManager.commitProcessedOffsets: error committing offsets',
         e,
       )
@@ -132,7 +130,7 @@ export class CommitManager {
   }
 
   rebalance = () => {
-    console.log('CommitManager.rebalance: clearing partition data')
+    this.logger.info('CommitManager.rebalance: clearing partition data')
     this.partitionOffsets.clear()
   }
 }

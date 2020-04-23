@@ -7,6 +7,7 @@ import {
   ProducerReadyHandler,
   DefaultPollIntervalMs,
 } from './types'
+import { Logger } from '../logger'
 
 export class AvroProducer {
   producer: Producer
@@ -14,8 +15,10 @@ export class AvroProducer {
   registry: CachedSchemaRegistry
   valueSchemaSubject: string
   keySchemaSubject?: string
+  logger: Logger
 
   constructor(
+    logger: Logger,
     brokerList: string,
     schemaRegistryUrl: string,
     topic: string,
@@ -27,8 +30,9 @@ export class AvroProducer {
     pollInterval: number = DefaultPollIntervalMs,
   ) {
     this.topic = topic
+    this.logger = logger
 
-    this.registry = new CachedSchemaRegistry(schemaRegistryUrl)
+    this.registry = new CachedSchemaRegistry(logger, schemaRegistryUrl)
 
     this.valueSchemaSubject = valueSchemaSubject
     this.keySchemaSubject = keySchemaSubject
@@ -72,12 +76,7 @@ export class AvroProducer {
       this.encode(this.keySchemaSubject, key),
     ])
 
-    console.debug(
-      'AvroProducer.produce: encodedKey =',
-      encodedKey,
-      'encodedValue = ',
-      encodedValue,
-    )
+    this.logger.debug('AvroProducer.produce', { encodedKey, encodedValue })
 
     this.producer.produce(
       this.topic,

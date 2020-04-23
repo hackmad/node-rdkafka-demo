@@ -1,4 +1,5 @@
 import { NonFlowingConsumer } from './non-flowing-consumer'
+
 import {
   MessageHandler,
   FailureHandler,
@@ -9,12 +10,17 @@ import {
   DefaultConsumeTimeoutMs,
   DefaultCommitIntervalMs,
 } from './types'
+
 import { Message, MessageKey, MessageValue } from 'node-rdkafka'
+
 import {
   CachedSchemaRegistry,
   DefaultRefetchThresholdMs,
 } from '../schema-registry'
+
 import { decode } from '../avro'
+
+import { Logger } from '../logger'
 
 type MessageData = Buffer | string | null | undefined
 
@@ -22,8 +28,10 @@ export class NonFlowingAvroConsumer {
   consumer: NonFlowingConsumer
   messageHandler: MessageHandler
   registry: CachedSchemaRegistry
+  logger: Logger
 
   constructor(
+    logger: Logger,
     brokerList: string,
     schemaRegistryUrl: string,
     topic: string,
@@ -41,12 +49,16 @@ export class NonFlowingAvroConsumer {
     // We will wire up our own message handler to decode messages.
     this.messageHandler = messageHandler
 
+    this.logger = logger
+
     this.registry = new CachedSchemaRegistry(
+      this.logger,
       schemaRegistryUrl,
       refetchThresholdMs,
     )
 
     this.consumer = new NonFlowingConsumer(
+      this.logger,
       brokerList,
       topic,
       consumerGroupId,
@@ -72,10 +84,9 @@ export class NonFlowingAvroConsumer {
         this.decode(value, false),
       ])
 
-      console.debug(
+      this.logger.debug(
         'NonFlowingAvroConsumer.handleMessage: decoded message',
-        decodedKey?.toString(),
-        decodedValue,
+        { decodedKey: decodedKey?.toString(), decodedValue },
       )
 
       const decodedMessage = {
@@ -85,7 +96,7 @@ export class NonFlowingAvroConsumer {
       }
       return await this.messageHandler(decodedMessage)
     } catch (e) {
-      console.error('NonFlowingAvroConsumer.handleMessage: error', e)
+      this.logger.error('NonFlowingAvroConsumer.handleMessage: error', e)
       return false
     }
   }

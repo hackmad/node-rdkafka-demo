@@ -1,6 +1,8 @@
 import axios from 'axios'
 import avsc from 'avsc'
 
+import { Logger } from '../logger'
+
 interface Schema {
   schemaId: number
   type: avsc.Type
@@ -12,14 +14,17 @@ export const DefaultRefetchThresholdMs = 1 * 60 * 60 * 1000 // 1 hour
 export class CachedSchemaRegistry {
   url: string
   refetchThresholdMs: number
+  logger: Logger
 
   schemasBySubject = new Map<string, Schema>()
   schemasById = new Map<number, Schema>()
 
   constructor(
+    logger: Logger,
     url: string,
     refetchThresholdMs: number = DefaultRefetchThresholdMs,
   ) {
+    this.logger = logger
     this.url = url
     this.refetchThresholdMs = refetchThresholdMs
   }
@@ -53,7 +58,7 @@ export class CachedSchemaRegistry {
 
       return avroType
     } catch (e) {
-      console.error('SchemaRegistry.getLatestBySchemaId: error', e)
+      this.logger.error('SchemaRegistry.getLatestBySchemaId: error', e)
       throw e
     }
   }
@@ -87,7 +92,7 @@ export class CachedSchemaRegistry {
 
       return [schemaId, avroType]
     } catch (e) {
-      console.error('SchemaRegistry.getLatestBySubject: error', e)
+      this.logger.error('SchemaRegistry.getLatestBySubject: error', e)
       throw e
     }
   }
@@ -99,7 +104,7 @@ export class CachedSchemaRegistry {
       const response = await axios.get(url)
       return response.data
     } catch (e) {
-      console.error('SchemaRegistry.getVersionsBySubject: error', e)
+      this.logger.error('SchemaRegistry.getVersionsBySubject: error', e)
       throw e
     }
   }
@@ -124,7 +129,7 @@ export class CachedSchemaRegistry {
         throw Error(`${response.status} ${response.statusText}`)
       }
     } catch (e) {
-      console.error('SchemaRegistry.register: error', e)
+      this.logger.error('SchemaRegistry.register: error', e)
       throw e
     }
   }

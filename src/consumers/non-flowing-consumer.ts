@@ -12,12 +12,7 @@ import {
 
 import { CommitManager } from './commit-manager'
 
-import {
-  messageToString,
-  delay,
-  exponentialBackoff,
-  assignmentToArray,
-} from './utils'
+import { delay, exponentialBackoff, assignmentToArray } from './utils'
 
 import {
   MessageHandler,
@@ -29,6 +24,8 @@ import {
   DefaultConsumeTimeoutMs,
   DefaultCommitIntervalMs,
 } from './types'
+
+import { Logger } from '../logger'
 
 export class NonFlowingConsumer {
   consumer: KafkaConsumer
@@ -45,7 +42,10 @@ export class NonFlowingConsumer {
 
   commitManager: CommitManager
 
+  logger: Logger
+
   constructor(
+    logger: Logger,
     brokerList: string,
     topic: string,
     consumerGroupId: string,
@@ -66,6 +66,8 @@ export class NonFlowingConsumer {
     this.minRetryDelayMs = minRetryDelayMs
     this.maxRetryDelayMs = maxRetryDelayMs
 
+    this.logger = logger
+
     // Create the consumer
     const globalConfig: ConsumerGlobalConfig = {
       'group.id': consumerGroupId,
@@ -83,6 +85,7 @@ export class NonFlowingConsumer {
     this.consumer.on('ready', this.onReady)
 
     this.commitManager = new CommitManager(
+      this.logger,
       this.consumer,
       commitNotificationHandler,
       failureHandler,
@@ -105,7 +108,7 @@ export class NonFlowingConsumer {
 
     // Non-flowing mode. We'll do one message at a time so we can control
     // offsets that are committed.
-    console.info('NonFlowingConsumer.onReady: consumer started')
+    this.logger.info('NonFlowingConsumer.onReady: consumer started')
   }
 
   handleMessage = async (err: LibrdKafkaError, messages: Message[]) => {
@@ -124,20 +127,18 @@ export class NonFlowingConsumer {
 
     // There should only be 1 message.
     const [message] = messages
-    console.debug(
-      'NonFlowingConsumer.handleMessage: ',
-      messageToString(message),
-    )
+    this.logger.debug('NonFlowingConsumer.handleMessage: ', {
+      kafka_message: message,
+    })
 
     // Do this here instead of when seeking back in stall().
     // Its harder to do async stuff in that code
     const attemptNum = this.retryAttempts[message.partition]
     if (attemptNum > 0) {
-      console.debug(
-        `NonFlowingConsumer.handleMessage: ` +
-          `stalling partition ${message.partition}, ` +
-          `offset ${message.offset}`,
-      )
+      this.logger.debug('NonFlowingConsumer.handleMessage: stalling', {
+        partition: message.partition,
+        offset: message.offset,
+      })
       await this.stallDelay(message.partition, attemptNum)
     }
 
@@ -149,29 +150,27 @@ export class NonFlowingConsumer {
       const handled = await this.messageHandler(message)
 
       if (!handled) {
-        console.debug(
-          'NonFlowingConsumer.handleMessage: not handled',
-          messageToString(message),
-        )
+        this.logger.debug('NonFlowingConsumer.handleMessage: not handled', {
+          kafka_message: message,
+        })
         this.stall(message)
       } else {
-        console.debug(
-          'NonFlowingConsumer.handleMessage: handled',
-          messageToString(message),
-        )
+        this.logger.debug('NonFlowingConsumer.handleMessage: handled', {
+          kafka_message: message,
+        })
 
         this.retryAttempts[message.partition] = 0
         this.commitManager.notifyFinishedProcessing(message)
       }
     } catch (e) {
-      console.error(
+      this.logger.error(
         'NonFlowingConsumer.handleMessage: error handling message',
         e,
       )
       this.failureHandler(e)
     } finally {
       // Next message
-      console.debug('NonFlowingConsumer.handleMessage: next message')
+      this.logger.debug('NonFlowingConsumer.handleMessage: next message')
       this.consumer.consume(1, this.handleMessage)
     }
   }
@@ -183,19 +182,23 @@ export class NonFlowingConsumer {
       attemptNum - 1,
     )
 
-    console.debug(
-      `NonFlowingConsumer.stallDelay: ` +
-        `partition ${partition}, attempt ${attemptNum} - ${ms} ms`,
-    )
+    this.logger.debug('NonFlowingConsumer.stallDelay:', {
+      partition,
+      attemptNum,
+      ms,
+    })
 
     await delay(ms)
 
-    console.debug('NonFlowingConsumer.stallDelay: ${partition}, done')
+    this.logger.debug('NonFlowingConsumer.stallDelay: done', { partition })
   }
 
   stall = (message: Message) => {
     // Clear everything and seek back to failed message
-    console.debug('NonFlowingConsumer.stall: partition = ', message.partition)
+    this.logger.debug('NonFlowingConsumer.stall', {
+      partition: message.partition,
+      offset: message.offset,
+    })
 
     // Seek back to current message's offset.
     this.consumer.seek(
@@ -209,7 +212,7 @@ export class NonFlowingConsumer {
         if (err) {
           // This could mean a potential problem with consumer. Notify the
           // calling code.
-          console.error(
+          this.logger.error(
             'NonFlowingConsumer.stall: failed to seek to message',
             err,
           )
@@ -227,11 +230,13 @@ export class NonFlowingConsumer {
   onOffsetCommit = (err: any, topicPartitions: any) => {
     if (err) {
       // Log the error and notify failure
-      console.error('NonFlowingConsumer.onOffsetCommit:', err)
+      this.logger.error('NonFlowingConsumer.onOffsetCommit:', err)
       this.failureHandler(err)
     } else {
       // Log the committed offset
-      console.debug('NonFlowingConsumer.onOffsetCommit: ', topicPartitions)
+      this.logger.debug('NonFlowingConsumer.onOffsetCommit', {
+        topicPartitions,
+      })
     }
   }
 
@@ -243,12 +248,12 @@ export class NonFlowingConsumer {
       this.revokePartitions(assignment)
       this.commitManager.rebalance()
     } else {
-      console.error('NonFlowingConsumer.onRebalance: error', err)
+      this.logger.error('NonFlowingConsumer.onRebalance: error', err)
     }
   }
 
   assignPartitions = (assignment: Assignment) => {
-    console.debug('NonFlowingConsumer.assignPartitions: ', assignment)
+    this.logger.debug('NonFlowingConsumer.assignPartitions: ', assignment)
 
     // Clear out the retry attempts.
     _.forEach(assignmentToArray(assignment), ({ partition }) => {
@@ -259,15 +264,19 @@ export class NonFlowingConsumer {
   }
 
   revokePartitions = (assignment: Assignment) => {
-    console.debug('NonFlowingConsumer.revokePartitions:')
+    this.logger.debug('NonFlowingConsumer.revokePartitions:')
 
     // If consumer was paused, resume it with the new partition assignment.
     if (this.paused) {
-      console.debug('NonFlowingConsumer.revokePartitions: paused -> resuming')
+      this.logger.debug(
+        'NonFlowingConsumer.revokePartitions: paused -> resuming',
+      )
       this.consumer.resume(assignmentToArray(assignment))
       this.paused = false
     } else {
-      console.debug('NonFlowingConsumer.revokePartitions: paused -> do nothing')
+      this.logger.debug(
+        'NonFlowingConsumer.revokePartitions: paused -> do nothing',
+      )
     }
 
     // Clear retry attempts

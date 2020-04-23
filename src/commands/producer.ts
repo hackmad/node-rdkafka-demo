@@ -5,6 +5,7 @@ import { LibrdKafkaError, DeliveryReport } from 'node-rdkafka'
 import { v4 as uuidv4 } from 'uuid'
 import fs from 'fs'
 import { randomItem } from './utils'
+import { Logger } from '../logger'
 
 interface ProducerCommandArgs extends CommonArgs {
   'dictionary-path': string
@@ -21,6 +22,8 @@ class ProducerCommand {
   stallProbability: number
   stallValue: string
 
+  logger = new Logger()
+
   constructor(argv: ProducerCommandArgs) {
     this.intervalMs = argv['interval']
     this.stallProbability = argv['stall-probability']
@@ -31,6 +34,7 @@ class ProducerCommand {
       .split('\n')
 
     this.producer = new StandardProducer(
+      this.logger,
       argv['broker-list'],
       argv['topic'],
       this.onReady,
@@ -44,14 +48,14 @@ class ProducerCommand {
   onReady = () => setInterval(this.produceMessage, this.intervalMs)
 
   onFailure = (err: LibrdKafkaError) => {
-    console.error('MAIN: producer error', err)
+    this.logger.error('MAIN: producer error', err)
   }
 
   onDeliveryReport = (err: LibrdKafkaError, report: DeliveryReport) => {
     if (err) {
-      console.error('MAIN: delivery report error', err)
+      this.logger.error('MAIN: delivery report error', err)
     } else {
-      console.info('MAIN: delivery report', report)
+      this.logger.info('MAIN: delivery report', report)
     }
   }
 
@@ -63,10 +67,10 @@ class ProducerCommand {
           ? this.stallValue
           : randomItem(this.dictionary)
 
-      console.info(`MAIN: producing ${key}, ${value}`)
+      this.logger.info('MAIN: producing', { key, value })
       await this.producer.produce(key, value)
     } catch (e) {
-      console.error('MAIN: error', e)
+      this.logger.error('MAIN: error', e)
     }
   }
 }

@@ -5,6 +5,7 @@ import { LibrdKafkaError, DeliveryReport } from 'node-rdkafka'
 import { v4 as uuidv4 } from 'uuid'
 import fs from 'fs'
 import { randomItem, randomItems } from './utils'
+import { Logger } from '../logger'
 
 interface AvroProducerCommandArgs extends CommonArgs {
   'dictionary-path': string
@@ -18,6 +19,8 @@ class AvroProducerCommand {
   dictionary: string[]
   intervalMs: number
 
+  logger = new Logger()
+
   constructor(argv: AvroProducerCommandArgs) {
     this.intervalMs = argv['interval']
 
@@ -26,6 +29,7 @@ class AvroProducerCommand {
       .split('\n')
 
     this.producer = new AvroProducer(
+      this.logger,
       argv['broker-list'],
       argv['schema-registry-url'],
       argv['topic'],
@@ -42,14 +46,14 @@ class AvroProducerCommand {
   onReady = () => setInterval(this.produceMessage, this.intervalMs)
 
   onFailure = (err: LibrdKafkaError) => {
-    console.error('MAIN: producer error', err)
+    this.logger.error('MAIN: producer error', err)
   }
 
   onDeliveryReport = (err: LibrdKafkaError, report: DeliveryReport) => {
     if (err) {
-      console.error('MAIN: delivery report error', err)
+      this.logger.error('MAIN: delivery report error', err)
     } else {
-      console.info('MAIN: delivery report', report)
+      this.logger.info('MAIN: delivery report', report)
     }
   }
 
@@ -70,10 +74,10 @@ class AvroProducerCommand {
         message: this.randomWords(),
       }
 
-      console.info('MAIN: producing ', key, value)
+      this.logger.info('MAIN: producing ', { key, value })
       await this.producer.produce(value, key)
     } catch (e) {
-      console.error('MAIN: error', e)
+      this.logger.error('MAIN: error', e)
     }
   }
 }
